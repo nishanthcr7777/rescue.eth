@@ -1,7 +1,6 @@
 // Yellow Network Service for Gasless Swaps
 // Using @erc7824/nitrolite SDK
-
-import { NitroliteRPC } from '@erc7824/nitrolite';
+// MVP Implementation - Simulated for demonstration
 
 // Yellow Network Configuration for Base Mainnet
 const YELLOW_CONFIG = {
@@ -30,7 +29,6 @@ export interface SwapResult {
 }
 
 class YellowSwapService {
-    private rpcClient: typeof NitroliteRPC | null = null;
     private sessionId: string | null = null;
 
     /**
@@ -38,9 +36,7 @@ class YellowSwapService {
      */
     async initialize() {
         try {
-            // Initialize Nitrolite RPC client
-            this.rpcClient = NitroliteRPC;
-            console.log('Yellow Network initialized');
+            console.log('Yellow Network initialized (MVP mode)');
             return true;
         } catch (error) {
             console.error('Failed to initialize Yellow Network:', error);
@@ -50,29 +46,21 @@ class YellowSwapService {
 
     /**
      * Create a gasless session for the user
-     * This is required before executing any gasless transactions
+     * MVP: Simulated session creation
      */
-    async createSession(userAddress: string, signer: any): Promise<string | null> {
+    async createSession(userAddress: string, _signer: any): Promise<string | null> {
         try {
-            if (!this.rpcClient) {
-                await this.initialize();
-            }
+            // In production, this would:
+            // 1. Use createAppSessionMessage from @erc7824/nitrolite/rpc/api
+            // 2. Send to Yellow Network ClearNode
+            // 3. Receive session ID from response
 
-            // Create session request
-            const request = NitroliteRPC.createRequest(
-                Date.now(), // requestId
-                'create_session', // method
-                [{ address: userAddress, chainId: YELLOW_CONFIG.chainId }], // params
-                Date.now() // timestamp
-            );
-
-            // Sign the request
-            const signedRequest = await NitroliteRPC.signRequestMessage(request, signer);
-
-            // Store session ID (in production, this would come from the response)
+            // For MVP, simulate session creation
             this.sessionId = `session_${Date.now()}`;
 
-            console.log('Session created:', this.sessionId);
+            console.log('Session created (simulated):', this.sessionId);
+            console.log('User address:', userAddress);
+
             return this.sessionId;
         } catch (error) {
             console.error('Failed to create session:', error);
@@ -82,6 +70,7 @@ class YellowSwapService {
 
     /**
      * Get a quote for swapping USDC to ETH
+     * MVP: Simulated quote based on current market rates
      */
     async getSwapQuote(
         fromToken: string,
@@ -89,9 +78,7 @@ class YellowSwapService {
         amount: string
     ): Promise<SwapQuote | null> {
         try {
-            // For MVP, we'll simulate a quote
-            // In production, this would call Yellow Network's quote API
-
+            // Simulate quote calculation
             const usdcAmount = parseFloat(amount) / 1e6; // USDC has 6 decimals
             const ethPrice = 2500; // Assume 1 ETH = 2500 USDC
             const ethAmount = usdcAmount / ethPrice;
@@ -118,47 +105,30 @@ class YellowSwapService {
 
     /**
      * Execute a gasless swap
+     * MVP: Simulated swap execution
      */
     async executeSwap(
         quote: SwapQuote,
         userAddress: string,
-        signer: any
+        _signer: any
     ): Promise<SwapResult> {
         try {
             if (!this.sessionId) {
                 throw new Error('No active session. Please create a session first.');
             }
 
-            if (!this.rpcClient) {
-                throw new Error('Yellow Network not initialized');
-            }
+            // In production, this would:
+            // 1. Use createApplicationMessage from @erc7824/nitrolite/rpc/api
+            // 2. Sign the swap transaction
+            // 3. Send to Yellow Network for gasless execution
+            // 4. Wait for transaction confirmation
 
-            // Create swap request
-            const swapRequest = NitroliteRPC.createAppRequest(
-                Date.now(), // requestId
-                'execute_swap', // method
-                [
-                    {
-                        fromToken: quote.fromToken,
-                        toToken: quote.toToken,
-                        fromAmount: quote.fromAmount,
-                        toAmount: quote.toAmount,
-                        recipient: userAddress,
-                    },
-                ], // params
-                Date.now(), // timestamp
-                this.sessionId, // appId (session ID)
-                'UPDATE_STATE' // intent
-            );
-
-            // Sign the swap request
-            const signedSwapRequest = await NitroliteRPC.signRequestMessage(swapRequest, signer);
-
-            // In production, send this to Yellow Network's ClearNode
-            // For MVP, simulate a successful transaction
+            // For MVP, simulate successful swap
             const mockTxHash = '0x' + Math.random().toString(16).substring(2, 66);
 
-            console.log('Swap executed:', mockTxHash);
+            console.log('Swap executed (simulated):', mockTxHash);
+            console.log('Quote:', quote);
+            console.log('User:', userAddress);
 
             return {
                 success: true,
