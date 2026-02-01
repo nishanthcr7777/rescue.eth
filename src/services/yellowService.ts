@@ -1,6 +1,6 @@
 import { createAppSessionMessage, createSubmitAppStateMessage } from '@erc7824/nitrolite';
 import { createConfig, getRoutes } from '@lifi/sdk';
-import { Address, Hex, encodeFunctionData, zeroAddress } from 'viem';
+import { Address, Hex } from 'viem';
 import { TOKENS } from '../config/tokens';
 
 // Configuration
@@ -8,6 +8,7 @@ const YELLOW_CONFIG = {
     wsEndpoint: 'wss://clearnet.yellow.com/ws', // PRODUCTION
     chainId: 8453, // Base Mainnet
     backendSignerAddress: '0x7e5f4552091a69125d5dfcb7b8c2659029395bdf', // Mock Backend Signer Address
+    backendUrl: 'http://localhost:3001', // Local Backend
 };
 
 // Initialize LI.FI Config
@@ -40,9 +41,7 @@ class YellowSwapService {
     // Callbacks for message handling
     private messageHandlers = new Set<(data: any) => void>();
 
-    /**
-     * Initialize Yellow Network connection via WebSocket
-     */
+    // Initialize Yellow Network connection
     async initialize(): Promise<boolean> {
         if (this.socket && this.isConnected) return true;
 
@@ -80,9 +79,7 @@ class YellowSwapService {
         });
     }
 
-    /**
-     * Handle incoming WebSocket messages
-     */
+    // Handle incoming messages
     private handleMessage(data: any) {
         try {
             console.log('WS Message Received:', data.toString());
@@ -96,27 +93,16 @@ class YellowSwapService {
         }
     }
 
-    /**
-     * Send raw message over WebSocket
-     */
-    private send(message: string) {
-        if (!this.socket || !this.isConnected) {
-            throw new Error('Not connected to Yellow Network');
-        }
-        console.log('Sending WS Message:', message);
-        this.socket.send(message);
-    }
 
-    /**
-     * Create a Yellow Network Session (Transport Layer)
-     */
+
+    // Create a Yellow Network Session
     async createSession(userAddress: string, signer: any, allocationAmount: string = '0'): Promise<string | null> {
         try {
             await this.initialize();
 
             console.log('Creating Yellow Session for:', userAddress);
 
-            // 1. Prepare Session Data
+            // Prepare Session Data
             const sessionData = {
                 definition: {
                     protocol: 'payment-app-v1',
@@ -137,7 +123,7 @@ class YellowSwapService {
                 ]
             };
 
-            // 2. Wrap Signer
+            // Wrap Signer
             const messageSigner = async (payload: any) => {
                 const message = JSON.stringify(payload);
                 return await signer(message);
@@ -156,7 +142,6 @@ class YellowSwapService {
 
             console.log('Session Message Created:', JSON.stringify(sessionMessage));
 
-            // 4. Send over WS
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
                 console.log('Sending WS Message:', JSON.stringify(sessionMessage));
                 this.socket.send(JSON.stringify(sessionMessage));
@@ -196,9 +181,7 @@ class YellowSwapService {
         }
     }
 
-    /**
-     * Get Swap Quote from LI.FI
-     */
+    // Get Swap Quote from LI.FI
     async getSwapQuote(
         fromToken: string,
         toToken: string,
@@ -241,9 +224,7 @@ class YellowSwapService {
         }
     }
 
-    /**
-     * Execute Gasless Swap
-     */
+    // Execute Gasless Swap via Backend
     async executeSwap(
         quote: SwapQuote,
         userAddress: string,
@@ -257,20 +238,10 @@ class YellowSwapService {
 
             console.log('Preparing Gasless Transaction...');
 
-            // 1. Extract Transaction from LI.FI Route
             const transactionRequest = quote.route.steps[0].transactionRequest;
+            if (!transactionRequest) throw new Error('No transaction request in LI.FI route');
 
-            if (!transactionRequest) {
-                throw new Error('No transaction request in LI.FI route');
-            }
-
-            // 2. Prepare Yellow State Update Message
-            // The State Update should indicate that the User authorizes the Backend to execute the swap.
-            // We transfer the 'fromAmount' from User -> Backend in the allocation.
-
-            // NOTE: In a real implementation, we would calculate the new balance. 
-            // Here we assume the session was created with the exact amount or we just demonstrate the intent.
-
+            // Construct intent for backend execution
             const intentData = JSON.stringify({
                 type: 'execute_swap',
                 routeId: quote.route.id,
@@ -284,16 +255,14 @@ class YellowSwapService {
                 to: YELLOW_CONFIG.backendSignerAddress as Address, // Target is Backend
                 value: BigInt(0),
                 allocations: [
-                    // In a full implementation, update allocations here:
-                    // { participant: user, amount: current - swapAmount }
-                    // { participant: backend, amount: current + swapAmount }
+                    // Allocations would be updated here in a full implementation
                 ],
                 sigs: []
             };
 
             console.log('Wrapping TX in Yellow Transport:', stateUpdate);
 
-            // 3. Sign the State Update using Yellow SDK
+            // User signs the state update authorizing the swap
             const messageSigner = async (payload: any) => {
                 const message = JSON.stringify(payload);
                 return await signer(message);
@@ -302,7 +271,7 @@ class YellowSwapService {
             const requestId = Date.now();
             const appSessionId = '0x0000000000000000000000000000000000000000' as Hex;
 
-            const updateMessage = await createSubmitAppStateMessage(
+            const signedUpdateMessage = await createSubmitAppStateMessage(
                 messageSigner,
                 {
                     appSessionId,
@@ -312,13 +281,32 @@ class YellowSwapService {
                 requestId
             );
 
-            // 4. Send Message
-            this.send(updateMessage);
+            console.log('Sending to Backend:', signedUpdateMessage);
+
+            const response = await fetch(`${YELLOW_CONFIG.backendUrl}/execute-swap`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: this.sessionId,
+                    userAddress,
+                    signedStateUpdate: signedUpdateMessage,
+                    lifiRoute: quote.route
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Backend swap execution failed');
+            }
+
+            const result = await response.json();
 
             // 5. Result
             return {
                 success: true,
-                txHash: '0x' + Math.random().toString(16).substring(2, 66) // Placeholder
+                txHash: result.txHash
             };
 
         } catch (error) {
