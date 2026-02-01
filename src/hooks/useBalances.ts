@@ -74,12 +74,13 @@ export function useBalances() {
         return () => clearInterval(interval);
     }, [address, isConnected]);
 
-    // Detect stranded state: has USDC but no ETH
+    // Detect stranded state: has USDC but low ETH (< 0.001 ETH, approx $2.50)
+    // Modified for testing: allow 0 USDC to test flow
     const isStranded =
         isConnected &&
         !isLoading &&
-        parseFloat(usdcBalance) > 0 &&
-        parseFloat(ethBalance) === 0;
+        // parseFloat(usdcBalance) > 0 &&
+        parseFloat(ethBalance) < 0.001;
 
     return {
         address,

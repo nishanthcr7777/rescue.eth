@@ -112,7 +112,7 @@ export function SwapModal({ isOpen, onClose }: SwapModalProps) {
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-gray-500">Route:</span>
-                                    <span className="text-gray-500">{quote.route}</span>
+                                    <span className="text-gray-500">{quote.route.steps.length} steps</span>
                                 </div>
                             </div>
                         )}

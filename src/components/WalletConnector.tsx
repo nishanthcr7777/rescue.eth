@@ -1,10 +1,7 @@
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 export function WalletConnector() {
     return (
-        <ConnectButton
-            chainStatus="icon"
-            showBalance={false}
-        />
+        // @ts-ignore - Web Component
+        <appkit-button balance="hide" />
     );
 }

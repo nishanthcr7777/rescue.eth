@@ -26,7 +26,8 @@ export function useYellowSwap() {
 
         try {
             // Create signer function for Nitrolite
-            const signer = async (message: string) => {
+            const signer = async (payload: any) => {
+                const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
                 return await walletClient.signMessage({ message });
             };
 
@@ -89,9 +90,21 @@ export function useYellowSwap() {
 
         try {
             // Create signer function
-            const signer = async (message: string) => {
+            const signer = async (payload: any) => {
+                const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
                 return await walletClient.signMessage({ message });
             };
+
+            // Ensure session exists
+            let activeSessionId = sessionId;
+            if (!activeSessionId) {
+                activeSessionId = await yellowSwapService.createSession(address, signer);
+                if (activeSessionId) {
+                    setSessionId(activeSessionId);
+                } else {
+                    throw new Error('Failed to create session');
+                }
+            }
 
             const result = await yellowSwapService.executeSwap(quote, address, signer);
 

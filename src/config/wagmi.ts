@@ -1,27 +1,30 @@
-import { http, createConfig } from 'wagmi';
-import { base } from 'wagmi/chains';
-import { injected, walletConnect } from 'wagmi/connectors';
+import { createAppKit } from '@reown/appkit/react';
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
+import { base } from '@reown/appkit/networks';
 
-// WalletConnect project ID
-const projectId = ((import.meta as any).env?.VITE_WALLETCONNECT_PROJECT_ID as string) || 'demo-project-id';
+// 1. Get Project ID
+export const projectId = ((import.meta as any).env?.VITE_WALLETCONNECT_PROJECT_ID as string) || '66185202613c77eb71131154f67c69f2'; // Using a public testing ID if missing
 
-// Try multiple RPC URLs for Base Mainnet
-const baseRpcUrls = [
-    'https://mainnet.base.org',
-    'https://base.llamarpc.com',
-    'https://base-mainnet.public.blastapi.io'
-];
+// 2. Set Chains
+export const networks = [base];
 
-export const config = createConfig({
-    chains: [base],
-    connectors: [
-        injected(),
-        walletConnect({ projectId }),
-    ],
-    transports: {
-        [base.id]: http(baseRpcUrls[0], {
-            batch: true,
-            retryCount: 3,
-        })
-    },
+// 3. Create Wagmi Adapter
+export const wagmiAdapter = new WagmiAdapter({
+    ssr: true,
+    networks,
+    projectId
 });
+
+// 4. Create Modal
+createAppKit({
+    // @ts-ignore - Type mismatch due to peer deps
+    adapters: [wagmiAdapter],
+    // @ts-ignore - Type mismatch due to peer deps
+    networks,
+    projectId,
+    features: {
+        analytics: true
+    }
+});
+
+export const config = wagmiAdapter.wagmiConfig;
