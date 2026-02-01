@@ -98,8 +98,8 @@ Never: User gets service without us getting paid ❌
 
 ```bash
 # Clone repo
-git clone https://github.com/yourusername/smart-rescue.git
-cd smart-rescue
+git clone https://github.com/yourusername/rescue.eth.git
+cd rescue.eth
 
 # Install dependencies
 npm install
@@ -130,61 +130,6 @@ VITE_SERVICE_WALLET_ADDRESS=0x...
 
 ---
 
-## 📖 Documentation
-
-- **[MASTER_SPECIFICATION.md](docs/MASTER_SPECIFICATION.md)** - Complete 0 to 1 spec
-- **[11_CODING_STYLE_GUIDE.md](docs/11_CODING_STYLE_GUIDE.md)** - TypeScript style guide
-- **[10_FUTURE_ENHANCEMENTS.md](docs/10_FUTURE_ENHANCEMENTS.md)** - Post-hackathon roadmap
-
----
-
-## 🎬 Demo
-
-**Live Demo:** [https://smart-rescue.vercel.app](https://smart-rescue.vercel.app)
-
-**Video Demo:** [2-minute walkthrough](https://youtu.be/...)
-
-### Demo Script (2 minutes)
-
-1. **Problem** (0:20) - User stuck with 100 USDC, 0 gas
-2. **Solution** (0:40) - Three rescue options
-3. **Simulation** (1:00) - Deterministic preview
-4. **Execute** (1:20) - One signature, gasless
-5. **Success** (1:40) - Problem solved, fee paid
-
----
-
-## 🏆 Hackathon Prizes
-
-**Target: $15,000-18,000**
-
-- **Yellow Network** ($5,000) - Gasless execution
-- **LI.FI Composer** ($5,000) - Routing + cross-chain
-- **ENS Creative DeFi** ($3,000) - Name resolution
-- **General Prizes** ($2,000-5,000) - Best UX, production-ready
-
----
-
-## 📊 Project Structure
-
-```
-/src
-  /components       # UI components
-  /services         # Yellow, LI.FI, fee collection
-  /hooks            # React hooks
-  /config           # Network, token configs
-  App.tsx
-  main.tsx
-
-/docs
-  MASTER_SPECIFICATION.md    # Complete spec
-  11_CODING_STYLE_GUIDE.md   # TypeScript style
-  10_FUTURE_ENHANCEMENTS.md  # Roadmap
-  /archive                   # Old planning docs
-```
-
----
-
 ## 🔒 Security
 
 - **Atomic fees** - No free rides
@@ -210,8 +155,6 @@ VITE_SERVICE_WALLET_ADDRESS=0x...
 - Transaction history
 - Mobile app
 
-See [10_FUTURE_ENHANCEMENTS.md](docs/10_FUTURE_ENHANCEMENTS.md) for details.
-
 ---
 
 ## 📝 License
@@ -220,20 +163,6 @@ MIT
 
 ---
 
-## 🤝 Contributing
-
-This is a hackathon project. Contributions welcome post-hackathon!
-
----
-
-## 📧 Contact
-
-- **Twitter:** [@yourusername](https://twitter.com/yourusername)
-- **Discord:** yourusername#1234
-- **Email:** your@email.com
-
----
-
-**Built with ❤️ for HackMoney 2024**
+**Built with ❤️ for HackMoney 2026**
 
 **Powered by Yellow Network, LI.FI, and ENS**
