@@ -15,6 +15,8 @@ export class YellowClient {
 
         this.ws.on('open', () => {
             console.log('✅ Connected to Yellow Network Clearnet');
+            // Start heartbeat
+            this.startHeartbeat();
         });
 
         this.ws.on('error', (err) => {
@@ -23,8 +25,27 @@ export class YellowClient {
 
         this.ws.on('close', () => {
             console.log('⚠️ Yellow WebSocket Disconnected. Reconnecting...');
+            this.stopHeartbeat();
             setTimeout(() => this.connect(), 3000);
         });
+    }
+
+    private pingInterval: NodeJS.Timeout | null = null;
+
+    private startHeartbeat() {
+        this.stopHeartbeat();
+        this.pingInterval = setInterval(() => {
+            if (this.ws?.readyState === WebSocket.OPEN) {
+                this.ws.ping();
+            }
+        }, 30000); // Ping every 30s
+    }
+
+    private stopHeartbeat() {
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
     }
 
     // Confirm state channel update off-chain

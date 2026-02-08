@@ -2,12 +2,12 @@ import { useAccount } from 'wagmi';
 import { useEffect, useState } from 'react';
 import { TOKENS } from '../config/tokens';
 import { formatUnits, createPublicClient, http } from 'viem';
-import { base } from 'wagmi/chains';
+import { baseSepolia } from 'wagmi/chains';
 
 // Create a public client for direct RPC calls
 const publicClient = createPublicClient({
-    chain: base,
-    transport: http('https://mainnet.base.org'),
+    chain: baseSepolia,
+    transport: http('https://sepolia.base.org'),
 });
 
 // ERC20 ABI for balanceOf
@@ -89,6 +89,6 @@ export function useBalances() {
         usdcBalance,
         isStranded,
         isLoading,
-        wrongNetwork: chain?.id !== base.id,
+        wrongNetwork: chain?.id !== baseSepolia.id,
     };
 }

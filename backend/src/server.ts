@@ -15,6 +15,11 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', backendAddress });
 });
 
+// Root route for connectivity check
+app.get('/', (req, res) => {
+    res.send('Yellow Connect Backend Running 🚀');
+});
+
 // Orchestrate gasless swap flow
 app.post('/execute-swap', async (req, res) => {
     try {
