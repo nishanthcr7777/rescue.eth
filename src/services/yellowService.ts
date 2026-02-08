@@ -10,8 +10,8 @@ import {
   RPCMethod,
 } from '@erc7824/nitrolite'
 
-import { createConfig } from '@lifi/sdk'
-import { Address, toHex } from 'viem'
+import { createConfig, getRoutes } from '@lifi/sdk'
+import { Address, getAddress, toHex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { TOKENS } from '../config/tokens'
 
@@ -21,7 +21,7 @@ import { TOKENS } from '../config/tokens'
 
 const YELLOW_CONFIG = {
   wsEndpoint: 'wss://clearnet-sandbox.yellow.com/ws', // Corrected Sandbox WebSocket
-  chainId: 8453,
+  chainId: 84532, // Base Sepolia
   backendSignerAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // Hardcoded for demo/sandbox
   backendUrl: 'http://localhost:3001',
 }
@@ -125,28 +125,40 @@ class YellowSwapService {
     // 🔹 EIP-712 SIGNING PARAMS (DIFFERENT SHAPE)
     const eip712AuthParams = {
       scope: 'user',
-      application: userAddress as Address,
-      participant: userAddress as Address,
-      session_key: this.localSessionAccount.address as Address,
+      application: getAddress(userAddress),
+      participant: getAddress(userAddress),
+      session_key: getAddress(this.localSessionAccount.address),
       expires_at: BigInt(expireTimestamp), // BigInt REQUIRED
       allowances: [],
     }
+
+    console.log('📝 EIP-712 Auth Params:', JSON.stringify({
+      ...eip712AuthParams,
+      expires_at: eip712AuthParams.expires_at.toString()
+    }, null, 2))
 
     const challenge = {
       method: RPCMethod.AuthChallenge,
       params: { challengeMessage: rawChallenge.challenge_message },
     } as const
 
-    const chainId = await walletClient.getChainId()
-    if (chainId !== YELLOW_CONFIG.chainId) {
-      await walletClient.switchChain({ id: YELLOW_CONFIG.chainId })
-    }
-
     const domain = {
       name: 'Nitro Auth',
       version: '1',
-      chainId: 8453,
+      chainId: 1, // ✅ Sandbox requires 1 for EIP-712 signing (Nitro rule)
       verifyingContract: '0x0000000000000000000000000000000000000000' as Address,
+    }
+
+    // viem requires the wallet chain to match the EIP-712 domain chainId
+    let currentChainId = await walletClient.getChainId()
+    if (currentChainId !== domain.chainId) {
+      console.log(`🔄 Switching to Mainnet (1) for Auth Signature`)
+      await walletClient.switchChain({ id: domain.chainId })
+
+      // Wait longer for the wallet to sync
+      await new Promise(r => setTimeout(r, 2000))
+      currentChainId = await walletClient.getChainId()
+      console.log(`📍 Current Chain ID after switch: ${currentChainId}`)
     }
 
     const signer = createEIP712AuthMessageSigner(
@@ -167,6 +179,11 @@ class YellowSwapService {
 
     console.log("✅ Yellow Auth Success")
     this.isAuthenticated = true
+
+    // Switch back to Base for session operations
+    console.log(`🔄 Switching back to Base (8453) for Session Create`)
+    await walletClient.switchChain({ id: YELLOW_CONFIG.chainId })
+
     return true
   }
 
@@ -182,40 +199,23 @@ class YellowSwapService {
       const handler = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data)
-          console.log(`📨 [Yellow WS] Received Message for ${expectedMethod}:`, JSON.stringify(data, null, 2))
 
-          if (!data?.res) {
-            console.log('⚠️ [Yellow WS] Message has no "res" field')
-            return
-          }
+          if (!data?.res || !Array.isArray(data.res)) return
 
-          if (!Array.isArray(data.res)) {
-            console.log('⚠️ [Yellow WS] "res" field is not an array')
-            return
-          }
-
-          const [id, method, result] = data.res
-          console.log(`🔍 [Yellow WS] Parsed ID: ${id}, Method: ${method}, Expected: ${expectedMethod}`)
+          const [, method, result] = data.res
 
           if (method === 'error') {
-            const errorMsg = result.error || JSON.stringify(result)
-            console.error(`❌ [Yellow WS] Server returned error for ${expectedMethod}:`, errorMsg)
             this.socket?.removeEventListener('message', handler)
-            reject(new Error(`Yellow Server Error: ${errorMsg}`))
+            reject(new Error(result.error || 'Yellow Server Error'))
             return
           }
 
-          // 🚨 Ignore background broker events or mismatched methods
-          if (method !== expectedMethod) {
-            console.log(`⏭️ [Yellow WS] Skipping message: method ${method} != ${expectedMethod}`)
-            return
-          }
+          if (method !== expectedMethod) return
 
-          console.log(`🎯 [Yellow WS] Match found for ${expectedMethod}! Resolving...`)
           this.socket?.removeEventListener('message', handler)
           resolve(result)
         } catch (err) {
-          console.error('🔴 [Yellow WS] Parse error', err)
+          console.error('WS parse error', err)
         }
       }
 
@@ -298,7 +298,6 @@ class YellowSwapService {
   /* -------------------------------------------------- */
 
   async getSwapQuote(fromToken: string, toToken: string, amount: string): Promise<SwapQuote | null> {
-    /* REAL CODE (DISABLED FOR DEMO)
     const routes = await getRoutes({
       fromChainId: YELLOW_CONFIG.chainId,
       toChainId: YELLOW_CONFIG.chainId,
@@ -310,6 +309,7 @@ class YellowSwapService {
 
     if (!routes.routes.length) return null
     const route = routes.routes[0]
+
     return {
       fromToken,
       toToken,
@@ -318,23 +318,6 @@ class YellowSwapService {
       estimatedGas: route.gasCostUSD || '0',
       route,
       priceImpact: 0
-    }
-    */
-
-    console.log('🧪 Mocking LI.FI Route for Demo');
-    await new Promise(r => setTimeout(r, 800));
-
-    return {
-      fromToken,
-      toToken,
-      fromAmount: amount,
-      toAmount: (BigInt(amount) * 2500n / 1000000n).toString(),
-      estimatedGas: '0.00',
-      route: {
-        id: 'mock-route-' + Date.now(),
-        steps: [{ type: 'swap', tool: 'uniswap' }]
-      },
-      priceImpact: 0.01
     }
   }
 
