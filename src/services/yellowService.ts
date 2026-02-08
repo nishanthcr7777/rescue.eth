@@ -1,343 +1,409 @@
-import { createAppSessionMessage, createSubmitAppStateMessage } from '@erc7824/nitrolite';
-import { createConfig, getRoutes } from '@lifi/sdk';
-import { Address, Hex } from 'viem';
-import { TOKENS } from '../config/tokens';
+import {
+  createAuthRequestMessage,
+  createAuthVerifyMessage,
+  createEIP712AuthMessageSigner,
+  createAppSessionMessage,
+  createSubmitAppStateMessage,
+  type MessageSigner,
+  type RPCAppDefinition,
+  type RPCAppSessionAllocation,
+  RPCMethod,
+} from '@erc7824/nitrolite'
 
-// Configuration
+import { createConfig } from '@lifi/sdk'
+import { Address, toHex } from 'viem'
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
+import { TOKENS } from '../config/tokens'
+
+/* -------------------------------------------------- */
+/* CONFIG                                              */
+/* -------------------------------------------------- */
+
 const YELLOW_CONFIG = {
-    wsEndpoint: 'wss://clearnet.yellow.com/ws', // PRODUCTION
-    chainId: 8453, // Base Mainnet
-    backendSignerAddress: '0x7e5f4552091a69125d5dfcb7b8c2659029395bdf', // Mock Backend Signer Address
-    backendUrl: 'http://localhost:3001', // Local Backend
-};
+  wsEndpoint: 'wss://ws-sandbox.yellow.network/ws', // Sandbox WebSocket
+  chainId: 8453,
+  backendSignerAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // Hardcoded for demo/sandbox
+  backendUrl: 'http://localhost:3001',
+}
 
-// Initialize LI.FI Config
-createConfig({
-    integrator: 'unstuck.eth',
-});
+createConfig({ integrator: 'unstuck.eth' })
+
+/* -------------------------------------------------- */
+/* TYPES                                               */
+/* -------------------------------------------------- */
+
+interface AppSession {
+  definition: RPCAppDefinition
+  allocations: RPCAppSessionAllocation[]
+}
 
 export interface SwapQuote {
-    fromToken: string;
-    toToken: string;
-    fromAmount: string;
-    toAmount: string;
-    estimatedGas: string;
-    route: any; // LI.FI Route
-    priceImpact: number;
+  fromToken: string
+  toToken: string
+  fromAmount: string
+  toAmount: string
+  estimatedGas: string
+  route: any
+  priceImpact: number
 }
 
 export interface SwapResult {
-    success: boolean;
-    txHash?: string;
-    error?: string;
+  success: boolean
+  txHash?: string
+  error?: string
 }
+
+/* -------------------------------------------------- */
+/* SERVICE                                             */
+/* -------------------------------------------------- */
 
 class YellowSwapService {
-    private socket: WebSocket | null = null;
-    private isConnected: boolean = false;
-    private sessionId: string | null = null;
-    private sessionActive: boolean = false;
+  private socket: WebSocket | null = null
+  private isAuthenticated = false
+  private sessionId: string | null = null
+  private sessionActive = false
+  private localSessionAccount: any = null
 
-    // Callbacks for message handling
-    private messageHandlers = new Set<(data: any) => void>();
+  /* -------------------------------------------------- */
+  /* CONNECTION                                         */
+  /* -------------------------------------------------- */
 
-    // Initialize Yellow Network connection
-    async initialize(): Promise<boolean> {
-        if (this.socket && this.isConnected) return true;
+  async initialize(): Promise<boolean> {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) return true
 
-        return new Promise((resolve) => {
-            try {
-                console.log('Connecting to Yellow Network Sandbox:', YELLOW_CONFIG.wsEndpoint);
-                this.socket = new WebSocket(YELLOW_CONFIG.wsEndpoint);
+    return new Promise(resolve => {
+      this.socket = new WebSocket(YELLOW_CONFIG.wsEndpoint)
 
-                this.socket.onopen = () => {
-                    console.log('Connected to Yellow Network');
-                    this.isConnected = true;
-                    resolve(true);
-                };
+      this.socket.onopen = () => {
+        console.log('🟢 Connected to Yellow')
+        resolve(true)
+      }
 
-                this.socket.onmessage = (event) => {
-                    this.handleMessage(event.data);
-                };
+      this.socket.onerror = err => {
+        console.error('🔴 Yellow WS Error', err)
+        resolve(false)
+      }
 
-                this.socket.onerror = (error) => {
-                    console.error('Yellow Network WebSocket error:', error);
-                    this.isConnected = false;
-                    resolve(false);
-                };
+      this.socket.onclose = () => {
+        console.log('🔌 Yellow Disconnected')
+        this.isAuthenticated = false
+        this.sessionActive = false
+      }
+    })
+  }
 
-                this.socket.onclose = () => {
-                    console.log('Disconnected from Yellow Network');
-                    this.isConnected = false;
-                    this.socket = null;
-                    this.sessionActive = false;
-                };
-            } catch (error) {
-                console.error('Failed to connect:', error);
-                resolve(false);
-            }
-        });
+  /* -------------------------------------------------- */
+  /* AUTHENTICATION                                     */
+  /* -------------------------------------------------- */
+  private async authenticate(userAddress: string, walletClient: any) {
+    if (this.isAuthenticated) return true
+    if (!this.socket) throw new Error("No WebSocket")
+
+    console.log('🔐 Starting Yellow Authentication')
+
+    const sessionPk = generatePrivateKey()
+    this.localSessionAccount = privateKeyToAccount(sessionPk)
+
+    const expireTimestamp = Math.floor(Date.now() / 1000) + 3600
+
+    const authParams = {
+      scope: 'user',
+      application: userAddress as Address,
+      participant: userAddress as Address,
+      session_key: this.localSessionAccount.address as Address,
+
+      // 🔥 REQUIRED PAIR
+      expire: String(expireTimestamp),     // for RPC
+      expires_at: BigInt(expireTimestamp), // for EIP-712 signing
+
+      allowances: [],
     }
 
-    // Handle incoming messages
-    private handleMessage(data: any) {
+
+    const requestId = Date.now()
+
+    const authReq = await createAuthRequestMessage(authParams as any, requestId)
+    this.socket.send(authReq)
+
+    const rawChallenge = await this.waitFor('auth_challenge')
+
+    const challenge = {
+      method: RPCMethod.AuthChallenge,
+      params: {
+        challengeMessage: rawChallenge.challenge_message,
+      },
+    } as const
+
+
+    const chainId = await walletClient.getChainId()
+    if (chainId !== YELLOW_CONFIG.chainId) {
+      await walletClient.switchChain({ id: YELLOW_CONFIG.chainId })
+    }
+
+    const domain = {
+      name: 'Nitro Auth',
+      version: '1',
+      chainId: YELLOW_CONFIG.chainId,
+      verifyingContract: '0x0000000000000000000000000000000000000000' as Address,
+    }
+
+    const signer = createEIP712AuthMessageSigner(
+      walletClient,
+      authParams as any,
+      domain
+    )
+
+    const verifyMsg = await createAuthVerifyMessage(
+      signer,
+      challenge,
+      requestId
+    )
+
+    this.socket.send(verifyMsg)
+
+    await this.waitFor('auth_verify')
+
+    console.log("✅ Yellow Auth Success")
+    this.isAuthenticated = true
+    return true
+  }
+
+
+  /* -------------------------------------------------- */
+  /* WAIT HELPER                                        */
+  /* -------------------------------------------------- */
+
+  private waitFor(expectedMethod: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!this.socket) return reject(new Error('No WebSocket'))
+
+      const handler = (event: MessageEvent) => {
         try {
-            console.log('WS Message Received:', data.toString());
-            const parsed = JSON.parse(data.toString());
+          const data = JSON.parse(event.data)
+          console.log('📨 WS Message:', data)
 
-            // Invoke all registered handlers
-            this.messageHandlers.forEach(handler => handler(parsed));
+          if (!data?.res) return
 
-        } catch (error) {
-            console.error('Error handling message:', error);
+          const [, method, result] = data.res
+
+          // 🚨 Ignore background broker events
+          if (method !== expectedMethod) return
+
+          this.socket?.removeEventListener('message', handler)
+          resolve(result)
+        } catch (err) {
+          console.error('WS parse error', err)
         }
+      }
+
+      this.socket.addEventListener('message', handler)
+
+      setTimeout(() => {
+        this.socket?.removeEventListener('message', handler)
+        reject(new Error(`Timeout waiting for ${expectedMethod}`))
+      }, 30000)
+    })
+  }
+  /* -------------------------------------------------- */
+  /* SESSION CREATION                                   */
+  /* -------------------------------------------------- */
+
+  async createSession(userAddress: string, signer: any): Promise<string | null> {
+    try {
+      await this.initialize()
+      await this.authenticate(userAddress, signer)
+
+      const participants = [userAddress, YELLOW_CONFIG.backendSignerAddress]
+        .sort((a, b) => a.localeCompare(b)) as Address[]
+
+      const nonce = Date.now().toString()
+
+      const session: AppSession = {
+        definition: {
+          protocol: 'payment-app-v1' as RPCAppDefinition['protocol'],
+          participants,
+          weights: [1, 1],
+          quorum: 2,
+          // @ts-ignore - Runtime expects string challenge
+          challenge: '0',
+          // @ts-ignore - User requires string nonce
+          nonce: nonce,
+        },
+        allocations: participants.map(p => ({
+          participant: p,
+          asset: TOKENS.USDC.address as Address,
+          amount: '0'
+        }))
+      }
+
+      const messageSigner: MessageSigner = async payload => {
+        const msg = typeof payload === 'string' ? payload : JSON.stringify(payload)
+        return await signer.signMessage({ message: msg })
+      }
+
+      const domain = {
+        name: 'Nitro Protocol',
+        version: '1',
+        chainId: YELLOW_CONFIG.chainId,
+        verifyingContract: '0x0000000000000000000000000000000000000000' as Address,
+      }
+
+      // @ts-ignore - Runtime expects 3 args (signer, domain, session)
+      const msg = await createAppSessionMessage(
+        messageSigner,
+        domain as any,
+        session as any
+      )
+      this.socket!.send(msg)
+
+      const res = await this.waitFor('session_create')
+
+      this.sessionId = res.sessionId || res.id || `session_${nonce}`
+      this.sessionActive = true
+
+      console.log('🟢 Yellow Session Created', this.sessionId)
+      return this.sessionId
+    } catch (error) {
+      console.error('Failed to create session:', error)
+      this.sessionActive = false
+      return null
     }
+  }
 
+  /* -------------------------------------------------- */
+  /* LI.FI QUOTE                                        */
+  /* -------------------------------------------------- */
 
+  async getSwapQuote(fromToken: string, toToken: string, amount: string): Promise<SwapQuote | null> {
+    /* REAL CODE (DISABLED FOR DEMO)
+    const routes = await getRoutes({
+      fromChainId: YELLOW_CONFIG.chainId,
+      toChainId: YELLOW_CONFIG.chainId,
+      fromTokenAddress: fromToken,
+      toTokenAddress: toToken,
+      fromAmount: amount,
+      options: { slippage: 0.005 }
+    })
 
-    // Create a Yellow Network Session
-    async createSession(userAddress: string, signer: any, allocationAmount: string = '0'): Promise<string | null> {
-        try {
-            await this.initialize();
-
-            console.log('Creating Yellow Session for:', userAddress);
-
-            // Prepare Session Data
-            const sessionData = {
-                definition: {
-                    protocol: 'payment-app-v1',
-                    // Correct Participants: User + Backend Signer (Counterparty)
-                    participants: [userAddress as Address, YELLOW_CONFIG.backendSignerAddress as Address],
-                    weights: [1, 1],
-                    quorum: 2,
-                    challenge: 0,
-                    nonce: Date.now()
-                },
-                // Initial Allocation: User deposits funds into the channel
-                allocations: [
-                    {
-                        participant: userAddress as Address,
-                        asset: TOKENS.USDC.address as Address,
-                        amount: allocationAmount, // Initial deposit logic needs to be handled by caller or assumed
-                    }
-                ]
-            };
-
-            // Wrap Signer
-            const messageSigner = async (payload: any) => {
-                const message = JSON.stringify(payload);
-                return await signer(message);
-            };
-
-            // 3. Create Session Message
-            const requestId = Date.now();
-            const sessionMessage = await createAppSessionMessage(
-                messageSigner,
-                {
-                    appDefinition: sessionData.definition as any,
-                    allocations: sessionData.allocations as any, // Include allocations in creation
-                } as any,
-                requestId
-            );
-
-            console.log('Session Message Created:', JSON.stringify(sessionMessage));
-
-            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                console.log('Sending WS Message:', JSON.stringify(sessionMessage));
-                this.socket.send(JSON.stringify(sessionMessage));
-
-                // Wait for response
-                return new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        reject(new Error('Session creation timed out'));
-                    }, 30000);
-
-                    const handler = (data: any) => {
-                        // Assuming the response contains a sessionId or confirmation
-                        // This is a placeholder for actual Yellow Network response parsing
-                        if (data && data.type === 'session_created' && data.sessionId) {
-                            clearTimeout(timeout);
-                            this.messageHandlers.delete(handler); // Clean up handler
-                            this.sessionId = data.sessionId;
-                            this.sessionActive = true;
-                            console.log('Yellow Session Established:', this.sessionId);
-                            resolve(this.sessionId);
-                        } else if (data && data.type === 'error') {
-                            clearTimeout(timeout);
-                            this.messageHandlers.delete(handler);
-                            reject(new Error(`Session creation failed: ${data.message}`));
-                        }
-                    };
-                    this.messageHandlers.add(handler);
-                });
-            } else {
-                throw new Error('WebSocket not connected');
-            }
-
-        } catch (error) {
-            console.error('Failed to create session:', error);
-            this.sessionActive = false;
-            return null;
-        }
+    if (!routes.routes.length) return null
+    const route = routes.routes[0]
+    return {
+      fromToken,
+      toToken,
+      fromAmount: amount,
+      toAmount: route.toAmount,
+      estimatedGas: route.gasCostUSD || '0',
+      route,
+      priceImpact: 0
     }
+    */
 
-    // Get Swap Quote from LI.FI
-    async getSwapQuote(
-        fromToken: string,
-        toToken: string,
-        amount: string
-    ): Promise<SwapQuote | null> {
-        try {
-            console.log('Getting LI.FI Quote...');
-            const routes = await getRoutes({
-                fromChainId: YELLOW_CONFIG.chainId,
-                toChainId: YELLOW_CONFIG.chainId,
-                fromTokenAddress: fromToken,
-                toTokenAddress: toToken,
-                fromAmount: amount, // Raw amount
-                options: {
-                    slippage: 0.005, // 0.5%
-                }
-            });
+    console.log('🧪 Mocking LI.FI Route for Demo');
+    await new Promise(r => setTimeout(r, 800));
 
-            if (!routes.routes.length) {
-                console.warn('No routes found via LI.FI');
-                return null;
-            }
-
-            const route = routes.routes[0];
-            const toAmount = route.toAmount;
-
-            return {
-                fromToken,
-                toToken,
-                fromAmount: amount,
-                toAmount,
-                estimatedGas: route.gasCostUSD || '0',
-                route: route,
-                priceImpact: 0 // LI.FI usually provides this in details
-            };
-
-        } catch (error) {
-            console.error('Failed to get LI.FI quote:', error);
-            return null;
-        }
+    return {
+      fromToken,
+      toToken,
+      fromAmount: amount,
+      toAmount: (BigInt(amount) * 2500n / 1000000n).toString(),
+      estimatedGas: '0.00',
+      route: {
+        id: 'mock-route-' + Date.now(),
+        steps: [{ type: 'swap', tool: 'uniswap' }]
+      },
+      priceImpact: 0.01
     }
+  }
 
-    // Execute Gasless Swap via Backend
-    async executeSwap(
-        quote: SwapQuote,
-        userAddress: string,
-        signer: any
-    ): Promise<SwapResult> {
-        try {
-            console.log('User Address for swap:', userAddress);
-            if (!this.sessionActive) {
-                throw new Error('Session not active. Call createSession first.');
-            }
+  /* -------------------------------------------------- */
+  /* EXECUTE GASLESS SWAP                               */
+  /* -------------------------------------------------- */
 
-            console.log('Preparing Gasless Transaction...');
+  async executeSwap(quote: SwapQuote, userAddress: string, signer: any): Promise<SwapResult> {
+    try {
+      if (!this.sessionActive || !this.sessionId) throw new Error('No active session')
 
-            const transactionRequest = quote.route.steps[0].transactionRequest;
-            if (!transactionRequest) throw new Error('No transaction request in LI.FI route');
+      const intentData = toHex(
+        new TextEncoder().encode(
+          JSON.stringify({
+            type: 'execute_swap',
+            routeId: quote.route.id,
+            sessionId: this.sessionId
+          })
+        )
+      )
 
-            // Construct intent for backend execution
-            const intentData = JSON.stringify({
-                type: 'execute_swap',
-                routeId: quote.route.id,
-                sessionId: this.sessionId,
-            });
+      const stateUpdate = {
+        intent: 0,
+        version: Date.now().toString(),
+        data: intentData,
+        to: YELLOW_CONFIG.backendSignerAddress as Address,
+        value: '0',
+        allocations: [],
+        sigs: []
+      }
 
-            const stateUpdate = {
-                intent: 0, // OPERATE
-                version: BigInt(Date.now()),
-                data: intentData as unknown as Hex, // Sending intent as data
-                to: YELLOW_CONFIG.backendSignerAddress as Address, // Target is Backend
-                value: BigInt(0),
-                allocations: [
-                    // Allocations would be updated here in a full implementation
-                ],
-                sigs: []
-            };
+      const messageSigner: MessageSigner = async payload => {
+        const msg = typeof payload === 'string' ? payload : JSON.stringify(payload)
+        return await signer.signMessage({ message: msg })
+      }
 
-            console.log('Wrapping TX in Yellow Transport:', stateUpdate);
+      const domain = {
+        name: 'Nitro Protocol',
+        version: '1',
+        chainId: YELLOW_CONFIG.chainId,
+        verifyingContract: '0x0000000000000000000000000000000000000000' as Address,
+      }
 
-            // User signs the state update authorizing the swap
-            const messageSigner = async (payload: any) => {
-                const message = JSON.stringify(payload);
-                return await signer(message);
-            };
+      const signedUpdate = await createSubmitAppStateMessage(
+        messageSigner,
+        domain as any,
+        {
+          appSessionId: this.sessionId || '0x0000000000000000000000000000000000000000',
+          status: 1,
+          ...stateUpdate
+        } as any
+      )
 
-            const requestId = Date.now();
-            const appSessionId = '0x0000000000000000000000000000000000000000' as Hex;
+      const response = await fetch(`${YELLOW_CONFIG.backendUrl}/execute-swap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: this.sessionId,
+          userAddress,
+          signedStateUpdate: signedUpdate,
+          lifiRoute: quote.route
+        })
+      })
 
-            const signedUpdateMessage = await createSubmitAppStateMessage(
-                messageSigner,
-                {
-                    appSessionId,
-                    status: 1, // Active
-                    ...stateUpdate
-                } as any,
-                requestId
-            );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
+      }
 
-            console.log('Sending to Backend:', signedUpdateMessage);
+      const result = await response.json()
 
-            const response = await fetch(`${YELLOW_CONFIG.backendUrl}/execute-swap`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    sessionId: this.sessionId,
-                    userAddress,
-                    signedStateUpdate: signedUpdateMessage,
-                    lifiRoute: quote.route
-                })
-            });
+      if (!result.txHash) {
+        throw new Error('No transaction hash returned from backend')
+      }
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Backend swap execution failed');
-            }
-
-            const result = await response.json();
-
-            // 5. Result
-            return {
-                success: true,
-                txHash: result.txHash
-            };
-
-        } catch (error) {
-            console.error('Swap execution failed:', error);
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Swap failed'
-            };
-        }
+      return { success: true, txHash: result.txHash }
+    } catch (error) {
+      console.error('Swap execution failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Swap failed'
+      }
     }
+  }
 
-    /**
-     * Close the gasless session
-     */
-    async closeSession(): Promise<void> {
-        this.sessionActive = false;
-        this.sessionId = null;
-    }
-
-    /**
-     * Check if gasless swap is available
-     */
-    isGaslessAvailable(fromToken: string, toToken: string): boolean {
-        // Base Mainnet USDC -> ETH/WETH
-        return (
-            YELLOW_CONFIG.chainId === 8453 &&
-            fromToken.toLowerCase() === '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'.toLowerCase() &&
-            (toToken.toLowerCase() === '0x4200000000000000000000000000000000000006'.toLowerCase() ||
-                toToken === '0x0000000000000000000000000000000000000000')
-        );
-    }
+  /**
+   * Close the current session and clean up resources
+   */
+  closeSession() {
+    this.sessionActive = false
+    this.sessionId = null
+  }
 }
 
-export const yellowSwapService = new YellowSwapService();
+export const yellowSwapService = new YellowSwapService()
