@@ -52,7 +52,7 @@ export function useYellowSwap() {
         try {
             const swapQuote = await yellowSwapService.getSwapQuote(
                 TOKENS.USDC.address,
-                '0x0000000000000000000000000000000000000000', // ETH
+                '0xEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE', // LI.FI Native Token address
                 usdcAmount
             )
 

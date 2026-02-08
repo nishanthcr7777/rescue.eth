@@ -9,21 +9,19 @@ interface SwapModalProps {
 
 export function SwapModal({ isOpen, onClose }: SwapModalProps) {
     const { quote, isLoading, error, getQuote, executeSwap } = useYellowSwap();
-    const [swapAmount, setSwapAmount] = useState('5'); // Default 5 USDC
+    const [swapAmount, setSwapAmount] = useState('5');
     const [txHash, setTxHash] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
     const handleGetQuote = async () => {
-        const amountInWei = (parseFloat(swapAmount) * 1e6).toString(); // USDC has 6 decimals
+        const amountInWei = (parseFloat(swapAmount) * 1e6).toString();
         await getQuote(amountInWei);
     };
 
     const handleExecuteSwap = async () => {
         const hash = await executeSwap();
-        if (hash) {
-            setTxHash(hash);
-        }
+        if (hash) setTxHash(hash);
     };
 
     const handleClose = () => {
@@ -33,117 +31,153 @@ export function SwapModal({ isOpen, onClose }: SwapModalProps) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
-                {/* Header */}
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-gray-900">Get Gas</h3>
-                    <button
-                        onClick={handleClose}
-                        className="text-gray-400 hover:text-gray-600"
-                    >
-                        ✕
-                    </button>
-                </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            {/* Backdrop Blur */}
+            <div
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+                onClick={handleClose}
+            />
 
-                {/* Success State */}
-                {txHash ? (
-                    <div className="space-y-4">
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <span className="text-2xl">✅</span>
-                                <div>
-                                    <p className="font-semibold text-green-900">Swap Successful!</p>
-                                    <p className="text-sm text-green-700 mt-1 break-all">
-                                        {txHash.substring(0, 10)}...{txHash.substring(txHash.length - 8)}
-                                    </p>
-                                </div>
+            {/* Modal Container */}
+            <div className="glass-card w-full max-w-lg rounded-[2.5rem] p-1 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-300">
+                <div className="bg-[hsl(var(--background))]/40 rounded-[2.4rem] p-8 space-y-8">
+
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-secondary/10 rounded-2xl flex items-center justify-center text-secondary">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-black font-outfit">Emergency Rescue</h3>
+                                <p className="text-xs text-[hsl(var(--muted-foreground))] font-bold uppercase tracking-widest">Powered by Yellow Network</p>
                             </div>
                         </div>
-                        <a
-                            href={`https://sepolia.basescan.org/tx/${txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block text-center text-blue-600 hover:underline"
-                        >
-                            View on BaseScan →
-                        </a>
                         <button
                             onClick={handleClose}
-                            className="w-full bg-gray-200 text-gray-900 py-2 px-4 rounded-lg hover:bg-gray-300"
+                            className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:text-white transition-all active:scale-90"
                         >
-                            Close
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
                         </button>
                     </div>
-                ) : (
-                    <div className="space-y-4">
-                        {/* Amount Input */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Amount (USDC)
-                            </label>
-                            <input
-                                type="number"
-                                value={swapAmount}
-                                onChange={(e) => setSwapAmount(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="5"
-                                min="1"
-                                max="1000"
-                            />
+
+                    {txHash ? (
+                        <div className="space-y-6 text-center py-8">
+                            <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 mx-auto mb-4 border border-green-500/20">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 className="text-2xl font-bold mb-2">Rescue Complete</h4>
+                                <p className="text-[hsl(var(--muted-foreground))]">Gas tokens are on their way to your wallet.</p>
+                            </div>
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10 break-all text-sm font-mono text-[hsl(var(--accent))]">
+                                {txHash}
+                            </div>
+                            <div className="flex flex-col gap-3 pt-4">
+                                <a
+                                    href={`https://sepolia.basescan.org/tx/${txHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn-primary"
+                                >
+                                    View on Explorer
+                                </a>
+                                <button onClick={handleClose} className="btn-ghost">Close Window</button>
+                            </div>
                         </div>
+                    ) : (
+                        <div className="space-y-8">
+                            {/* Input Group */}
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between items-end mb-3">
+                                        <label className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Amount to Rescue</label>
+                                        <span className="text-[10px] text-[hsl(var(--accent))] font-black uppercase tracking-tighter bg-[hsl(var(--accent))]/10 px-2 py-0.5 rounded-full">No Gas Fee</span>
+                                    </div>
+                                    <div className="relative group">
+                                        <input
+                                            type="number"
+                                            value={swapAmount}
+                                            onChange={(e) => setSwapAmount(e.target.value)}
+                                            className="input-field pr-20 text-xl font-bold"
+                                            placeholder="5"
+                                        />
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-sm text-[hsl(var(--muted-foreground))]">USDC</div>
+                                    </div>
+                                </div>
 
-                        {/* Quote Display */}
-                        {quote && (
-                            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">You pay:</span>
-                                    <span className="font-semibold">{swapAmount} USDC</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">You receive:</span>
-                                    <span className="font-semibold">
-                                        {parseFloat(formatUnits(BigInt(quote.toAmount), 18)).toFixed(6)} ETH
-                                    </span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">Gas fee:</span>
-                                    <span className="font-semibold text-green-600">FREE ✨</span>
-                                </div>
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-gray-500">Route:</span>
-                                    <span className="text-gray-500">{quote.route.steps.length} steps</span>
-                                </div>
+                                {quote && (
+                                    <div className="p-6 bg-white/5 rounded-[1.5rem] border border-white/10 space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                        <div className="flex justify-between items-center pb-4 border-b border-white/5">
+                                            <span className="text-sm text-[hsl(var(--muted-foreground))] font-medium">Estimated Return</span>
+                                            <div className="text-right">
+                                                <div className="text-lg font-black text-white">
+                                                    {parseFloat(formatUnits(BigInt(quote.toAmount), 18)).toFixed(6)} ETH
+                                                </div>
+                                                <div className="text-[10px] text-[hsl(var(--muted-foreground))] font-bold uppercase">Gas Tank Contribution</div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-[hsl(var(--muted-foreground))]">Protocol Fee</span>
+                                                <span className="text-green-500 font-bold tracking-widest uppercase italic">Sponsored ✨</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-[hsl(var(--muted-foreground))]">LIFI Efficiency</span>
+                                                <span className="text-white font-bold tracking-tight">Best Route Locked</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {error && (
+                                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 text-red-200 text-sm">
+                                        <span>⚠️</span>
+                                        <p>{error}</p>
+                                    </div>
+                                )}
                             </div>
-                        )}
 
-                        {/* Error Display */}
-                        {error && (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                <p className="text-sm text-red-700">{error}</p>
-                            </div>
-                        )}
-
-                        {/* Action Buttons */}
-                        {!quote ? (
-                            <button
-                                onClick={handleGetQuote}
-                                disabled={isLoading || !swapAmount}
-                                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold"
-                            >
-                                {isLoading ? 'Getting Quote...' : 'Get Quote'}
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleExecuteSwap}
-                                disabled={isLoading}
-                                className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-semibold"
-                            >
-                                {isLoading ? 'Executing...' : 'Execute Swap'}
-                            </button>
-                        )}
-                    </div>
-                )}
+                            {/* Actions */}
+                            {!quote ? (
+                                <button
+                                    onClick={handleGetQuote}
+                                    disabled={isLoading || !swapAmount}
+                                    className="btn-primary w-full py-5 text-lg"
+                                >
+                                    {isLoading ? (
+                                        <div className="flex items-center justify-center gap-3">
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Analyzing Routes...</span>
+                                        </div>
+                                    ) : 'Lock Rescue Route'}
+                                </button>
+                            ) : (
+                                <div className="space-y-4">
+                                    <button
+                                        onClick={handleExecuteSwap}
+                                        disabled={isLoading}
+                                        className="btn-secondary w-full py-5 text-lg shadow-[0_0_20px_hsla(var(--secondary),0.3)]"
+                                    >
+                                        {isLoading ? (
+                                            <div className="flex items-center justify-center gap-3">
+                                                <div className="w-5 h-5 border-2 border-secondary-foreground/30 border-t-secondary-foreground rounded-full animate-spin" />
+                                                <span>Signing Transaction...</span>
+                                            </div>
+                                        ) : 'Commit Emergency Swap'}
+                                    </button>
+                                    <p className="text-center text-[10px] text-[hsl(var(--muted-foreground))] font-medium uppercase tracking-widest">You will sign a gasless EIP-712 message</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

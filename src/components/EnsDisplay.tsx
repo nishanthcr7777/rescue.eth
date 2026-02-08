@@ -11,9 +11,9 @@ export function EnsDisplay() {
     if (!isConnected || !ensName) return null;
 
     return (
-        <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
-            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">ENS</span>
-            <span className="text-sm font-semibold text-blue-900">{ensName}</span>
+        <div className="flex items-center gap-2 bg-white/5 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 shadow-sm transition-all hover:border-[hsl(var(--accent))]/50 group">
+            <span className="text-[10px] font-black text-[hsl(var(--accent))] uppercase tracking-[0.2em] bg-[hsl(var(--accent))]/10 px-2 py-0.5 rounded-md group-hover:bg-[hsl(var(--accent))]/20 transition-colors">ENS</span>
+            <span className="text-sm font-bold font-outfit text-white tracking-tight">{ensName}</span>
         </div>
     );
 }

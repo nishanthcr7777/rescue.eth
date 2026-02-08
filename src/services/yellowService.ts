@@ -132,11 +132,6 @@ class YellowSwapService {
       allowances: [],
     }
 
-    console.log('📝 EIP-712 Auth Params:', JSON.stringify({
-      ...eip712AuthParams,
-      expires_at: eip712AuthParams.expires_at.toString()
-    }, null, 2))
-
     const challenge = {
       method: RPCMethod.AuthChallenge,
       params: { challengeMessage: rawChallenge.challenge_message },
@@ -298,6 +293,14 @@ class YellowSwapService {
   /* -------------------------------------------------- */
 
   async getSwapQuote(fromToken: string, toToken: string, amount: string): Promise<SwapQuote | null> {
+    console.log('🗺️ Fetching LI.FI routes with:', {
+      fromChainId: YELLOW_CONFIG.chainId,
+      toChainId: YELLOW_CONFIG.chainId,
+      fromTokenAddress: fromToken,
+      toTokenAddress: toToken,
+      fromAmount: amount,
+    })
+
     const routes = await getRoutes({
       fromChainId: YELLOW_CONFIG.chainId,
       toChainId: YELLOW_CONFIG.chainId,

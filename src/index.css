@@ -1,16 +1,157 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+:root {
+  /* HSL Color System - Deep Space Theme */
+  --background: 230 20% 8%;
+  --foreground: 210 20% 98%;
+
+  --primary: 217 91% 60%;
+  --primary-foreground: 210 20% 98%;
+
+  --secondary: 47 100% 50%;
+  /* Rescue Gold */
+  --secondary-foreground: 230 20% 8%;
+
+  --accent: 199 89% 48%;
+  /* Electric Blue */
+  --accent-foreground: 210 20% 98%;
+
+  --muted: 230 15% 20%;
+  --muted-foreground: 215 15% 65%;
+
+  --border: 230 15% 15%;
+  --input: 230 15% 15%;
+
+  --glass-bg: 230 20% 12% / 0.7;
+  --glass-border: 210 20% 100% / 0.1;
+  --glass-blur: 12px;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-white font-inter;
+    margin: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-outfit font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-[hsl(var(--glass-bg))] backdrop-blur-[var(--glass-blur)] border border-[hsl(var(--glass-border))] shadow-xl;
+  }
+
+  .glass-panel {
+    @apply bg-white/[0.03] backdrop-blur-[var(--glass-blur)] border-b border-white/[0.05];
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary to-accent hover:from-primary hover:to-primary text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg shadow-primary/20 hover:shadow-primary/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-gradient-to-r from-secondary to-secondary hover:brightness-110 text-secondary-foreground font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg shadow-secondary/10 hover:shadow-secondary/20 active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-white/5 text-muted-foreground hover:text-white font-medium py-2 px-4 rounded-lg transition-all active:scale-95;
+  }
+
+  .input-field {
+    @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all placeholder:text-muted-foreground/50;
+  }
 }
 
 #root {
   min-height: 100vh;
+  @apply flex flex-col;
+}
+
+/* Background Gradients */
+.bg-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 10% 10%, hsla(var(--primary), 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, hsla(var(--accent), 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, hsla(var(--secondary), 0.05) 0%, transparent 60%);
+  @apply bg-background;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-white/10 rounded-full hover:bg-white/20 transition-all;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-top {
+  from {
+    transform: translateY(-1rem);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: forwards;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.zoom-in {
+  animation-name: zoom-in;
+}
+
+.slide-in-from-top-4 {
+  animation-name: slide-in-from-top;
 }
