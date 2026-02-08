@@ -20,7 +20,7 @@ import { TOKENS } from '../config/tokens'
 /* -------------------------------------------------- */
 
 const YELLOW_CONFIG = {
-  wsEndpoint: 'wss://ws-sandbox.yellow.network/ws', // Sandbox WebSocket
+  wsEndpoint: 'wss://clearnet-sandbox.yellow.com/ws', // Corrected Sandbox WebSocket
   chainId: 8453,
   backendSignerAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // Hardcoded for demo/sandbox
   backendUrl: 'http://localhost:3001',
@@ -106,34 +106,36 @@ class YellowSwapService {
 
     const expireTimestamp = Math.floor(Date.now() / 1000) + 3600
 
-    const authParams = {
+    // 🔹 RPC AUTH REQUEST PARAMS (sent over WS)
+    const rpcAuthParams = {
       scope: 'user',
       application: userAddress as Address,
       participant: userAddress as Address,
       session_key: this.localSessionAccount.address as Address,
-
-      // 🔥 REQUIRED PAIR
-      expire: String(expireTimestamp),     // for RPC
-      expires_at: BigInt(expireTimestamp), // for EIP-712 signing
-
+      expire: String(expireTimestamp), // STRING for RPC
       allowances: [],
     }
 
-
     const requestId = Date.now()
-
-    const authReq = await createAuthRequestMessage(authParams as any, requestId)
+    const authReq = await createAuthRequestMessage(rpcAuthParams as any, requestId)
     this.socket.send(authReq)
 
     const rawChallenge = await this.waitFor('auth_challenge')
 
+    // 🔹 EIP-712 SIGNING PARAMS (DIFFERENT SHAPE)
+    const eip712AuthParams = {
+      scope: 'user',
+      application: userAddress as Address,
+      participant: userAddress as Address,
+      session_key: this.localSessionAccount.address as Address,
+      expires_at: BigInt(expireTimestamp), // BigInt REQUIRED
+      allowances: [],
+    }
+
     const challenge = {
       method: RPCMethod.AuthChallenge,
-      params: {
-        challengeMessage: rawChallenge.challenge_message,
-      },
+      params: { challengeMessage: rawChallenge.challenge_message },
     } as const
-
 
     const chainId = await walletClient.getChainId()
     if (chainId !== YELLOW_CONFIG.chainId) {
@@ -143,13 +145,13 @@ class YellowSwapService {
     const domain = {
       name: 'Nitro Auth',
       version: '1',
-      chainId: YELLOW_CONFIG.chainId,
+      chainId: 8453,
       verifyingContract: '0x0000000000000000000000000000000000000000' as Address,
     }
 
     const signer = createEIP712AuthMessageSigner(
       walletClient,
-      authParams as any,
+      eip712AuthParams as any,
       domain
     )
 
@@ -180,19 +182,40 @@ class YellowSwapService {
       const handler = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data)
-          console.log('📨 WS Message:', data)
+          console.log(`📨 [Yellow WS] Received Message for ${expectedMethod}:`, JSON.stringify(data, null, 2))
 
-          if (!data?.res) return
+          if (!data?.res) {
+            console.log('⚠️ [Yellow WS] Message has no "res" field')
+            return
+          }
 
-          const [, method, result] = data.res
+          if (!Array.isArray(data.res)) {
+            console.log('⚠️ [Yellow WS] "res" field is not an array')
+            return
+          }
 
-          // 🚨 Ignore background broker events
-          if (method !== expectedMethod) return
+          const [id, method, result] = data.res
+          console.log(`🔍 [Yellow WS] Parsed ID: ${id}, Method: ${method}, Expected: ${expectedMethod}`)
 
+          if (method === 'error') {
+            const errorMsg = result.error || JSON.stringify(result)
+            console.error(`❌ [Yellow WS] Server returned error for ${expectedMethod}:`, errorMsg)
+            this.socket?.removeEventListener('message', handler)
+            reject(new Error(`Yellow Server Error: ${errorMsg}`))
+            return
+          }
+
+          // 🚨 Ignore background broker events or mismatched methods
+          if (method !== expectedMethod) {
+            console.log(`⏭️ [Yellow WS] Skipping message: method ${method} != ${expectedMethod}`)
+            return
+          }
+
+          console.log(`🎯 [Yellow WS] Match found for ${expectedMethod}! Resolving...`)
           this.socket?.removeEventListener('message', handler)
           resolve(result)
         } catch (err) {
-          console.error('WS parse error', err)
+          console.error('🔴 [Yellow WS] Parse error', err)
         }
       }
 
