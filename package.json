@@ -15,7 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@erc7824/nitrolite": "^0.5.3",
+    "@erc7824/nitrolite": "0.5.4",
     "@lifi/sdk": "^3.4.1",
     "@reown/appkit": "^1.6.0",
     "@reown/appkit-adapter-wagmi": "^1.6.0",
