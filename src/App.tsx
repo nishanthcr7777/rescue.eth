@@ -3,6 +3,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { WalletConnector } from './components/WalletConnector';
 import { SwapModal } from './components/SwapModal';
 import { useBalances } from './hooks/useBalances';
+import { EnsDisplay } from './components/EnsDisplay';
 import { config } from './config/wagmi';
 import { useState } from 'react';
 
@@ -21,7 +22,10 @@ function AppContent() {
                         <span className="text-2xl">🚀</span>
                         <h1 className="text-xl font-bold text-gray-900">rescue.eth</h1>
                     </div>
-                    <WalletConnector />
+                    <div className="flex items-center gap-4">
+                        <EnsDisplay />
+                        <WalletConnector />
+                    </div>
                 </div>
             </nav>
 
