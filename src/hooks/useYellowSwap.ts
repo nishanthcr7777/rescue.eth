@@ -1,134 +1,118 @@
-import { useState } from 'react';
-import { useAccount, useWalletClient } from 'wagmi';
-import { yellowSwapService, SwapQuote } from '../services/yellowService';
-import { TOKENS } from '../config/tokens';
+import { useState } from 'react'
+import { useAccount, useWalletClient } from 'wagmi'
+import { yellowSwapService, SwapQuote } from '../services/yellowService'
+import { TOKENS } from '../config/tokens'
 
 export function useYellowSwap() {
-    const { address } = useAccount();
-    const { data: walletClient } = useWalletClient();
+    const { address } = useAccount()
+    const { data: walletClient } = useWalletClient()
 
-    const [sessionId, setSessionId] = useState<string | null>(null);
-    const [quote, setQuote] = useState<SwapQuote | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null)
+    const [quote, setQuote] = useState<SwapQuote | null>(null)
+    const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     /**
-     * Create a gasless session
+     * Create a Nitro gasless session
      */
     const createSession = async () => {
         if (!address || !walletClient) {
-            setError('Wallet not connected');
-            return;
+            setError('Wallet not connected')
+            return
         }
 
-        setIsLoading(true);
-        setError(null);
+        setIsLoading(true)
+        setError(null)
 
         try {
-            // Create signer function for Nitrolite
-            const signer = async (payload: any) => {
-                const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
-                return await walletClient.signMessage({ message });
-            };
+            const session = await yellowSwapService.createSession(address, walletClient)
 
-            const session = await yellowSwapService.createSession(address, signer);
+            if (!session) throw new Error('Failed to create session')
 
-            if (session) {
-                setSessionId(session);
-            } else {
-                throw new Error('Failed to create session');
-            }
+            setSessionId(session)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to create session');
+            setError(err instanceof Error ? err.message : 'Failed to create session')
         } finally {
-            setIsLoading(false);
+            setIsLoading(false)
         }
-    };
+    }
 
     /**
-     * Get a swap quote
+     * Get LI.FI quote
      */
     const getQuote = async (usdcAmount: string) => {
         if (!address) {
-            setError('Wallet not connected');
-            return;
+            setError('Wallet not connected')
+            return
         }
 
-        setIsLoading(true);
-        setError(null);
+        setIsLoading(true)
+        setError(null)
 
         try {
             const swapQuote = await yellowSwapService.getSwapQuote(
                 TOKENS.USDC.address,
                 '0x0000000000000000000000000000000000000000', // ETH
                 usdcAmount
-            );
+            )
 
-            if (swapQuote) {
-                setQuote(swapQuote);
-            } else {
-                throw new Error('Failed to get quote');
-            }
+            if (!swapQuote) throw new Error('No route found')
+
+            setQuote(swapQuote)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to get quote');
+            setError(err instanceof Error ? err.message : 'Failed to get quote')
         } finally {
-            setIsLoading(false);
+            setIsLoading(false)
         }
-    };
+    }
 
     /**
-     * Execute the swap
+     * Execute gasless swap
      */
     const executeSwap = async () => {
         if (!quote || !address || !walletClient) {
-            setError('Missing required data');
-            return null;
+            setError('Missing required data')
+            return null
         }
 
-        setIsLoading(true);
-        setError(null);
+        setIsLoading(true)
+        setError(null)
 
         try {
-            // Create signer function
-            const signer = async (payload: any) => {
-                const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
-                return await walletClient.signMessage({ message });
-            };
+            let activeSessionId = sessionId
 
-            // Ensure session exists
-            let activeSessionId = sessionId;
+            // Auto-create session if missing
             if (!activeSessionId) {
-                activeSessionId = await yellowSwapService.createSession(address, signer);
-                if (activeSessionId) {
-                    setSessionId(activeSessionId);
-                } else {
-                    throw new Error('Failed to create session');
-                }
+                activeSessionId = await yellowSwapService.createSession(address, walletClient)
+                if (!activeSessionId) throw new Error('Failed to create session')
+                setSessionId(activeSessionId)
             }
 
-            const result = await yellowSwapService.executeSwap(quote, address, signer);
+            const result = await yellowSwapService.executeSwap(
+                quote,
+                address,
+                walletClient
+            )
 
-            if (result.success) {
-                return result.txHash;
-            } else {
-                throw new Error(result.error || 'Swap failed');
-            }
+            if (!result.success) throw new Error(result.error || 'Swap failed')
+
+            return result.txHash || null
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Swap execution failed');
-            return null;
+            setError(err instanceof Error ? err.message : 'Swap execution failed')
+            return null
         } finally {
-            setIsLoading(false);
+            setIsLoading(false)
         }
-    };
+    }
 
     /**
-     * Close the session
+     * Close Nitro session
      */
     const closeSession = async () => {
-        await yellowSwapService.closeSession();
-        setSessionId(null);
-        setQuote(null);
-    };
+        yellowSwapService.closeSession()
+        setSessionId(null)
+        setQuote(null)
+    }
 
     return {
         sessionId,
@@ -139,5 +123,5 @@ export function useYellowSwap() {
         getQuote,
         executeSwap,
         closeSession,
-    };
+    }
 }

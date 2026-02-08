@@ -61,7 +61,7 @@ export function SwapModal({ isOpen, onClose }: SwapModalProps) {
                             </div>
                         </div>
                         <a
-                            href={`https://basescan.org/tx/${txHash}`}
+                            href={`https://sepolia.basescan.org/tx/${txHash}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="block text-center text-blue-600 hover:underline"
